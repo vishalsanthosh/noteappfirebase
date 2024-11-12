@@ -1,5 +1,10 @@
+
+
+import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:hive/hive.dart';
+import 'package:noteappfirebase/database.dart';
 class NoteApp extends StatefulWidget {
   
 
@@ -9,25 +14,85 @@ class NoteApp extends StatefulWidget {
 
 class _NoteAppState extends State<NoteApp> {
   late Box box;
-   List<Map<String,String>> itemList=[];
+   List<Map<String,String>> itemS=[];
 
   TextEditingController title=TextEditingController();
   TextEditingController category=TextEditingController();
   TextEditingController description=TextEditingController();
   TextEditingController date=TextEditingController();
- 
-  @override
-  void initState(){
-    super.initState();
-     box=Hive.box("MyBox");
-     final storedItems=box.get('itemsList');
-     if(storedItems is List){
-      itemList=List<Map<String,String>>.from(
-        storedItems.map((e)=>Map<String,String>.from(e))
-      );
-     }
+ Stream<QuerySnapshot>? NoteStream;
 
-  }
+ getontheload()async{
+  NoteStream=await Database.getNoteDetails();
+  setState(() {
+    
+  });
+ }
+
+  @override
+ void initState(){
+  super.initState();
+  getontheload();
+ }
+   Widget allNoteDetails(){
+    return StreamBuilder(stream: NoteStream, builder: (context,AsyncSnapshot<QuerySnapshot>snapshot){
+      if(snapshot.connectionState==ConnectionState.waiting){
+        return Center(child: CircularProgressIndicator(),);
+      }
+      if(snapshot.hasError){
+        return Center(child: Text("Error: ${snapshot.error}"),);
+
+      }
+       if(snapshot.hasData||snapshot.data!.docs.isEmpty){
+        return Center(child: Text("No Details Available"),);
+
+      }
+      return GridView.builder(gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(crossAxisCount: 2),
+      itemCount: snapshot.data!.docs.length,
+       itemBuilder: (context,index){
+        DocumentSnapshot ds=snapshot.data!.docs[index];
+      return Padding(padding: EdgeInsets.all(12),
+      child: Container(
+        height: 120,
+      width: 120,
+      decoration:  BoxDecoration(borderRadius: BorderRadius.circular(10),border: Border.all(color: Colors.black)),
+      child: Padding(padding: EdgeInsets.all(8),
+      child: Column(
+        children: [
+          Row(
+            children: [
+              Text("Title:" + (ds['Title']?? "N/A"),style: TextStyle(fontSize: 18,color: Colors.green,),),
+                      Spacer(),
+                      GestureDetector(
+                        onTap: (){
+                          title.text=ds['Name'];
+                          category.text=ds['Age'];
+                          description.text=ds["Location"];
+                          EditNoteDetails(ds["Id"]);
+                        },
+                        child: Icon(Icons.edit),
+                      ),
+                      IconButton(onPressed: ()async{
+                      await Database.deleteNoteDetails(ds['Id']);
+                      }, icon: Icon(Icons.delete))
+            ],
+          ),
+           SizedBox(height: 3,),
+                  Text("Category:"+ (ds["Category"]?? "N/A").toString(),style: TextStyle(fontSize: 18,color: Colors.yellow),),
+                  SizedBox(height: 3,),
+                  Text("Description:" + (ds["Description"]?? "N/A"),style: TextStyle(color: Colors.red,fontSize: 18),),
+                  SizedBox(height: 3,),
+                  Text("Date:"+(ds["Description"]?? "N/A"),style: TextStyle(color: const Color.fromARGB(255, 2, 154, 255),fontSize: 18)),
+        ],
+      ),
+      ),
+
+      ),
+      );
+       });
+    });
+   }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -35,26 +100,11 @@ class _NoteAppState extends State<NoteApp> {
         title: Text('NOTEAPP')
       ),
 body: 
-GridView.builder(
-  itemCount: itemList.length,
-  gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(crossAxisCount: 2),
- itemBuilder: (
-  
-  context,index){
-  final item=itemList[index];
-  return Container(
-    height: 300,
-    width: double.infinity,
-    child: Column(
-      children: [
-        Text(item['title']?? 'No title'),
-        Text(item['category']?? 'No catrgory'),
-        Text(item['description']?? 'No description'),
-        Text(item['date']?? 'No date')
-      ],
-    ),
-  );
- }),
+Column(
+        children: [
+          Expanded(child: allNoteDetails())
+        ],
+      ),
 
 floatingActionButton: FloatingActionButton(onPressed: (){
       showModalBottomSheet(context: context, builder: (BuildContext context){
@@ -78,7 +128,7 @@ child: Padding(
         width: 300,
         child: TextField(
           controller: category,
-          decoration: InputDecoration(border: OutlineInputBorder(),label:Text('Categort')),)),
+          decoration: InputDecoration(border: OutlineInputBorder(),label:Text('Category')),)),
       SizedBox(height: 10),
        SizedBox(
         height: 50,
@@ -100,7 +150,7 @@ child: Padding(
           children: [
             TextButton(onPressed: (){
               setState(() {
-                itemList.add({'title':title.text,
+                itemS.add({'title':title.text,
                 'category':category.text,
                 'description':description.text,
                 'date':date.text,
@@ -108,7 +158,7 @@ child: Padding(
               });
               box.put(
                 'itemsList',
-                 itemList.map((e)=>Map<String,dynamic>.from(e)
+                 itemS.map((e)=>Map<String,dynamic>.from(e)
                 ).toList());
             });
               title.clear();
@@ -136,5 +186,6 @@ child: Padding(
     },
     child: Icon(Icons.add),),
     );
+    
   }
 }
